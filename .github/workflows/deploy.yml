@@ -1,0 +1,104 @@
+name: CI/CD - Test and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Build and start containers
+        run: docker compose up -d --build
+
+      - name: Wait for the frontend
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+
+      - name: Show container status
+        run: docker compose ps
+
+      - name: Stop test containers
+        if: always()
+        run: docker compose down
+
+  deploy:
+    name: Deploy to cloud VM
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+      SERVER_SSH_HOST_KEY: ${{ secrets.SERVER_SSH_HOST_KEY }}
+      APP_DIR: ${{ secrets.APP_DIR }}
+
+    steps:
+      - name: Install SSH password client
+        run: sudo apt-get update && sudo apt-get install --yes sshpass
+
+      - name: Configure SSH host verification
+        shell: bash
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Pull and deploy the latest version
+        shell: bash
+        run: |
+          sshpass -e ssh \
+            -p "${SERVER_PORT:-22}" \
+            "$SERVER_USER@$SERVER_HOST" \
+            "bash -s -- '$APP_DIR'" <<'REMOTE'
+          set -euo pipefail
+
+          app_dir="$1"
+          cd "$app_dir"
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          docker compose up -d --build --remove-orphans
+          docker compose ps
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1/ > /dev/null; then
+              echo "Deployment completed successfully."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose logs
+          exit 1
+          REMOTE
