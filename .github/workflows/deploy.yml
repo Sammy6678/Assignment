@@ -83,6 +83,27 @@ jobs:
           set -euo pipefail
 
           app_dir="$1"
+
+          if ! command -v git >/dev/null || ! command -v docker >/dev/null || ! command -v curl >/dev/null; then
+            echo "Deployment prerequisites are missing. Install Git, Docker, Docker Compose, and curl on the VM."
+            exit 1
+          fi
+
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "The Docker Compose plugin is not installed on the VM."
+            exit 1
+          fi
+
+          if ! docker info >/dev/null 2>&1; then
+            echo "The deployment user cannot access Docker. Add the user to the docker group, then log out and reconnect."
+            exit 1
+          fi
+
+          if [ ! -d "$app_dir/.git" ]; then
+            echo "APP_DIR does not point to a cloned Git repository: $app_dir"
+            exit 1
+          fi
+
           cd "$app_dir"
 
           git fetch origin main
