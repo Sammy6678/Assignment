@@ -69,13 +69,19 @@ Assignment/
 │       └── deploy.yml
 ├── app/
 │   ├── main.py
+│   ├── requirements-dev.txt
 │   └── requirements.txt
 ├── frontend/
 │   └── index.html
+├── tests/
+│   ├── conftest.py
+│   ├── test_connection_manager.py
+│   └── test_endpoints.py
 ├── ARCHITECTURE.md
 ├── Dockerfile
 ├── docker-compose.yml
 ├── nginx.conf
+├── pytest.ini
 └── README.md
 ```
 
@@ -203,6 +209,21 @@ Stop and remove the project containers:
 ```bash
 docker compose down
 ```
+
+## Unit tests
+
+The backend has a pytest suite in `tests/` covering `ConnectionManager` and both the
+HTTP and WebSocket endpoints of `app/main.py`.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r app/requirements-dev.txt
+pytest
+```
+
+`pytest.ini` enables coverage reporting for `app/`. The suite also runs in the
+GitHub Actions `test` job before the containers are built.
 
 ## Local functional test
 
