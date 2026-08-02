@@ -276,30 +276,62 @@
                 wsUrl = 'ws://127.0.0.1:8000/ws';
             }
 
-            const socket = new WebSocket(wsUrl);
-
             const scrollToBottom = () => {
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             };
 
-            socket.onopen = () => {
-                connectionStatus.textContent = 'Connected';
-                connectionStatus.className = 'connection-status connected';
+            const setStatus = (text, state) => {
+                connectionStatus.textContent = text;
+                connectionStatus.className = state ? `connection-status ${state}` : 'connection-status';
             };
 
-            socket.onclose = () => {
-                connectionStatus.textContent = 'Disconnected';
-                connectionStatus.className = 'connection-status disconnected';
+            const showSystemMessage = (message) => {
+                const div = document.createElement('div');
+                div.className = 'system-message';
+                div.textContent = message;
+                messagesContainer.appendChild(div);
+                scrollToBottom();
+            };
+
+            let socket;
+            try {
+                socket = new WebSocket(wsUrl);
+            } catch (error) {
+                console.error('Could not open a WebSocket to', wsUrl, error);
+                setStatus('Connection failed', 'disconnected');
+                showSystemMessage('Could not connect to the chat server. Reload the page to try again.');
+                return;
+            }
+
+            socket.onopen = () => {
+                setStatus('Connected', 'connected');
+            };
+
+            socket.onerror = (event) => {
+                console.error('WebSocket error', event);
+                setStatus('Connection error', 'disconnected');
+                showSystemMessage('The connection to the chat server failed.');
+            };
+
+            socket.onclose = (event) => {
+                setStatus('Disconnected', 'disconnected');
+                if (!event.wasClean) {
+                    console.error('WebSocket closed unexpectedly', event.code, event.reason);
+                    showSystemMessage('Disconnected from the chat server. Reload the page to reconnect.');
+                }
             };
 
             socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (error) {
+                    console.error('Discarding a malformed message from the server', event.data, error);
+                    return;
+                }
 
                 if (data.type === 'system') {
-                    const div = document.createElement('div');
-                    div.className = 'system-message';
-                    div.textContent = data.message;
-                    messagesContainer.appendChild(div);
+                    showSystemMessage(data.message);
                 } 
                 else if (data.type === 'stats') {
                     userCount.textContent = data.count;
@@ -335,17 +367,28 @@
             form.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const msg = input.value.trim();
-                if (msg && socket.readyState === WebSocket.OPEN) {
+                if (!msg) {
+                    return;
+                }
+                if (socket.readyState !== WebSocket.OPEN) {
+                    showSystemMessage('Message not sent: you are not connected to the chat server.');
+                    return;
+                }
+                try {
                     socket.send(msg);
                     input.value = '';
+                } catch (error) {
+                    console.error('Failed to send the message', error);
+                    showSystemMessage('Message not sent. Check your connection and try again.');
                 }
             });
             
-            // Reconnect logic or status update for UI feedback
+            // Status update for UI feedback when the tab regains focus
             window.addEventListener('focus', () => {
                 if (socket.readyState === WebSocket.OPEN) {
-                    connectionStatus.textContent = 'Connected';
-                    connectionStatus.className = 'connection-status connected';
+                    setStatus('Connected', 'connected');
+                } else if (socket.readyState === WebSocket.CLOSED) {
+                    setStatus('Disconnected', 'disconnected');
                 }
             });
         });
