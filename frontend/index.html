@@ -282,51 +282,47 @@
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             };
 
-            socket.onopen = () => {
-                connectionStatus.textContent = 'Connected';
-                connectionStatus.className = 'connection-status connected';
+            const setConnectionStatus = (state, label) => {
+                connectionStatus.textContent = label;
+                connectionStatus.className = `connection-status ${state}`;
             };
 
-            socket.onclose = () => {
-                connectionStatus.textContent = 'Disconnected';
-                connectionStatus.className = 'connection-status disconnected';
+            const createElement = (className, text = '') => {
+                const element = document.createElement('div');
+                element.className = className;
+                element.textContent = text;
+                return element;
             };
+
+            const createSpan = (text) => {
+                const span = document.createElement('span');
+                span.textContent = text;
+                return span;
+            };
+
+            socket.onopen = () => setConnectionStatus('connected', 'Connected');
+
+            socket.onclose = () => setConnectionStatus('disconnected', 'Disconnected');
 
             socket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'system') {
-                    const div = document.createElement('div');
-                    div.className = 'system-message';
-                    div.textContent = data.message;
-                    messagesContainer.appendChild(div);
+                    messagesContainer.appendChild(createElement('system-message', data.message));
                 } 
                 else if (data.type === 'stats') {
                     userCount.textContent = data.count;
                 } 
                 else if (data.type === 'chat') {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = `message ${data.isSelf ? 'self' : 'other'}`;
-                    
-                    const metaDiv = document.createElement('div');
-                    metaDiv.className = 'message-meta';
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.textContent = data.isSelf ? 'You' : data.username;
-                    
-                    const timeSpan = document.createElement('span');
-                    timeSpan.textContent = data.time;
-                    
-                    metaDiv.appendChild(nameSpan);
-                    metaDiv.appendChild(timeSpan);
-                    
-                    const bubbleDiv = document.createElement('div');
-                    bubbleDiv.className = 'message-bubble';
-                    bubbleDiv.textContent = data.message;
-                    
+                    const msgDiv = createElement(`message ${data.isSelf ? 'self' : 'other'}`);
+
+                    const metaDiv = createElement('message-meta');
+                    metaDiv.appendChild(createSpan(data.isSelf ? 'You' : data.username));
+                    metaDiv.appendChild(createSpan(data.time));
+
                     msgDiv.appendChild(metaDiv);
-                    msgDiv.appendChild(bubbleDiv);
-                    
+                    msgDiv.appendChild(createElement('message-bubble', data.message));
+
                     messagesContainer.appendChild(msgDiv);
                 }
                 scrollToBottom();
@@ -344,8 +340,7 @@
             // Reconnect logic or status update for UI feedback
             window.addEventListener('focus', () => {
                 if (socket.readyState === WebSocket.OPEN) {
-                    connectionStatus.textContent = 'Connected';
-                    connectionStatus.className = 'connection-status connected';
+                    setConnectionStatus('connected', 'Connected');
                 }
             });
         });

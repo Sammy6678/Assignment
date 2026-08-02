@@ -1,22 +1,26 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from typing import List
+from typing import Any, Callable, Dict, List
 import json
+import os
 import random
 from datetime import datetime
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 app = FastAPI()
 
+
+def system_payload(message: str) -> Dict[str, Any]:
+    return {"type": "system", "message": message}
+
+
 @app.get("/")
 async def get():
-    import os
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     index_path = os.path.join(base_dir, "frontend", "index.html")
     return FileResponse(index_path)
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    from fastapi.responses import Response
     return Response(status_code=204)
 
 class ConnectionManager:
@@ -43,37 +47,35 @@ class ConnectionManager:
             del self.user_data[websocket]
         return user_name
 
+    async def send_payload(self, payload: Dict[str, Any], websocket: WebSocket):
+        await websocket.send_text(json.dumps(payload))
+
+    async def broadcast_payload(self, build_payload: Callable[[WebSocket], Dict[str, Any]]):
+        for connection in self.active_connections:
+            await self.send_payload(build_payload(connection), connection)
+
     async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(json.dumps({
-            "type": "system", 
-            "message": message
-        }))
+        await self.send_payload(system_payload(message), websocket)
 
     async def broadcast_chat_message(self, message: str, sender: WebSocket):
         sender_name = self.user_data.get(sender, "Unknown")
         cur_time = datetime.now().strftime("%I:%M:%S %p")
-        for connection in self.active_connections:
-            await connection.send_text(json.dumps({
-                "type": "chat",
-                "username": sender_name,
-                "message": message,
-                "time": cur_time,
-                "isSelf": sender == connection
-            }))
-            
+        await self.broadcast_payload(lambda connection: {
+            "type": "chat",
+            "username": sender_name,
+            "message": message,
+            "time": cur_time,
+            "isSelf": sender == connection
+        })
+
     async def broadcast_system_message(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(json.dumps({
-                "type": "system",
-                "message": message
-            }))
-            
+        await self.broadcast_payload(lambda connection: system_payload(message))
+
     async def broadcast_stats(self):
-        for connection in self.active_connections:
-            await connection.send_text(json.dumps({
-                "type": "stats",
-                "count": len(self.active_connections)
-            }))
+        await self.broadcast_payload(lambda connection: {
+            "type": "stats",
+            "count": len(self.active_connections)
+        })
 
 manager = ConnectionManager()
 
