@@ -356,6 +356,30 @@ assignment. A dedicated SSH deployment key is preferable for a production system
 Other useful extensions include monitoring, centralized logs, Redis-backed shared
 state, immutable image publishing, and Infrastructure as Code.
 
+### Application hardening
+
+- The WebSocket handshake rejects cross-origin requests, which prevents cross-site
+  WebSocket hijacking. Requests without an `Origin` header (non-browser clients) are
+  still accepted.
+- Chat payloads are length-limited, stripped of control characters, and rate limited
+  per connection; the server also caps concurrent connections.
+- Interactive API documentation (`/docs`, `/redoc`, `/openapi.json`) is disabled unless
+  `ENABLE_DOCS=true`.
+- Nginx sends `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a
+  Content Security Policy, and hides its version banner.
+- The backend image runs as an unprivileged user and Python dependencies are pinned.
+
+### Backend environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ALLOWED_ORIGINS` | empty (same-origin only) | Comma-separated origin allowlist for the WebSocket |
+| `ENABLE_DOCS` | `false` | Expose the FastAPI documentation endpoints |
+| `MAX_MESSAGE_LENGTH` | `2000` | Maximum characters per chat message |
+| `MAX_CONNECTIONS` | `200` | Maximum concurrent WebSocket connections |
+| `RATE_LIMIT_MESSAGES` | `10` | Messages allowed per window, per connection |
+| `RATE_LIMIT_WINDOW_SECONDS` | `5` | Length of the rate-limit window |
+
 ## Submission
 
 - GitHub repository: [https://github.com/Sammy6678/Assignment](https://github.com/Sammy6678/Assignment)
