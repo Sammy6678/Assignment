@@ -4,6 +4,13 @@ services:
     container_name: chat-backend
     expose:
       - "8000"
+    environment:
+      # Comma-separated origins allowed to open the WebSocket. Empty means
+      # same-origin only. Example: https://chat.example.com
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
+    security_opt:
+      - no-new-privileges:true
     restart: always
 
   nginx:
